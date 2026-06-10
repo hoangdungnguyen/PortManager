@@ -1,0 +1,21 @@
+# Auto-detect text files, normalize line endings to LF on commit
+# and prevent CRLF from creeping in on Windows checkouts.
+* text=auto eol=lf
+
+# Explicitly mark these as text and ensure LF.
+*.js        text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sh        text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+
+# Binary files
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.vsix      binary

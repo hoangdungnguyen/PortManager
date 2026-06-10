@@ -1,5 +1,19 @@
 .vscode/**
 node_modules/**
 *.vsix
-.gitignore
 .git/**
+
+# Editor / OS metadata
+.DS_Store
+Thumbs.db
+.vscode-test/**
+
+# Build / dev artifacts
+.vsce-output/**
+*.log
+*.tsbuildinfo
+
+# Test scaffolding (none in v1.0.x, kept for future)
+coverage/**
+**/*.test.js
+**/__tests__/**

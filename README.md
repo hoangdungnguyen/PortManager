@@ -1,143 +1,67 @@
 # ⚡ Port Manager
 
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/port-manager-saiki.port-manager?style=flat-square&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=port-manager-saiki.port-manager)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/port-manager-saiki.port-manager?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=port-manager-saiki.port-manager)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
+**List, kill, and manage your listening ports — RAM, VRAM, presets, and notes.**
 
-**View listening ports, check availability, and kill processes — all inside VS Code.**
+A VS Code sidebar panel showing every listening port on your machine, with one-click kill, range scan, presets for restartable apps, and per-port notes.
 
-No more switching to a terminal to find out what's hogging port 3000. Port Manager gives you a dedicated sidebar panel and quick commands to manage your local ports without leaving your editor.
-<img width="851" height="776" alt="スクリーンショット 2026-02-21 11 28 19" src="https://github.com/user-attachments/assets/8cc76ccd-96a3-4cb0-a727-0a54fa258896" />
+**Forked from** [saisai-web/port-manager](https://github.com/saisai-web/port-manager) and improved with new features and bug fixes.
 
+## ✨ Features
 
-## Features
+- **Sidebar panel** — all listening ports, RAM, VRAM, Forwarded Address, per-port Note
+- **One-click kill** (with confirmation) and bulk kill
+- **Range scan** to find free ports
+- **Presets** — Start / Stop / Resume for long-running apps (auto-bump port if taken)
+- **Per-port Note** — annotate each port; auto-creates a stub preset if none exists
+- **Smart ghost rows** — stopped presets stay visible (with RESUME); auto-clean when the port is reused
+- **Forwarded Address** — `asExternalUri` integration so the panel shows the working URL on remote/SSH
+- **Auto-refresh every 10s** (paused when the panel is hidden)
 
-### 🔌 Sidebar Panel
+## 🚀 Quick start
 
-A dedicated panel in the Activity Bar showing all listening ports in real time.
+1. Open the **Port Manager** activity bar icon (server icon `$(server)`)
+2. The panel lists all listening ports
+3. Click `↗` next to a row to open the address in your browser
+4. Click `KILL` to stop a process, or `✎` to edit a port's note
 
-- **Search** — Filter by port number or process name instantly
-- **Sort** — Click column headers to sort by port, process, PID, or state
-- **Kill** — One-click kill with confirmation dialog
-- **Bulk Kill** — Select multiple ports and kill them all at once
-- **Range Scan** — Check how many ports are free in a given range
+## ⚙️ Config
 
-### ⌨️ Command Palette
+Data lives in `~/.vscode/.portmanager/`:
+- `apps.json` — preset definitions (`label`, `command`, `defaultPort`, `openBrowser`, `note`)
+- `runtime.json` — live state of each preset
+- `stopped.json` — non-preset ghost rows
 
-Three commands accessible via `Ctrl+Shift+P` / `Cmd+Shift+P`:
+Use the **Edit Config** button in the toolbar to open `apps.json` in the editor.
+
+## ⌨️ Commands
 
 | Command | Description |
 |---------|-------------|
-| **Port Manager: Show Listening Ports** | Quick Pick list → select a port to kill |
-| **Port Manager: Check Port Availability** | Enter a port number → see if it's free or occupied |
-| **Port Manager: Kill Port** | Enter port number(s) → kill immediately (comma-separated for bulk) |
+| `Port Manager: Show Listening Ports` | Quick Pick list → select a port to kill |
+| `Port Manager: Check Port Availability` | Enter a port → see if it's free |
+| `Port Manager: Kill Port` | Enter port(s) → kill (comma-separated for bulk) |
+| `Port Manager: Start Preset` | Start a preset by name |
+| `Port Manager: Stop Preset` | Stop a running preset |
+| `Port Manager: Restart Preset` | Stop + start a preset |
+| `Port Manager: Edit Config` | Open `apps.json` |
 
-### 🎨 Theme Support
-
-Automatically adapts to your VS Code theme — dark, light, or high contrast.
-
-## Supported Platforms
-
-| Platform | Port Detection | Process Kill |
-|----------|---------------|-------------|
-| **macOS** | `lsof` | `kill -9` |
-| **Linux** | `lsof` / `ss` | `kill -9` |
-| **Windows** | `netstat` + `tasklist` | `taskkill /F` |
-
-## Usage Tips
-
-- **Can't kill a port?** On macOS/Linux, some system ports require `sudo`. On Windows, run VS Code as Administrator.
-- **Port still showing after kill?** Hit the ↻ Refresh button — the OS may take a moment to release the port.
-- **Use Range Scan** to quickly find an available port for your dev server.
-
-## Requirements
-
-- VS Code 1.80.0 or later
-- No additional dependencies
-
-## Release Notes
-
-### 1.0.0
-
-- Initial release
-- Sidebar webview panel with search, sort, and kill
-- Command palette integration (show / check / kill)
-- Cross-platform support (macOS, Windows, Linux)
-- Bulk kill support
-- Range scan
-
-## Development
-
-### Project Structure
-
-```
-src/
-├── extension.js       # Entry point
-├── constants.js       # Constants
-├── portService.js     # Port detection & management
-├── commands.js        # VS Code commands
-├── webviewProvider.js # Webview handler
-└── webview/
-    ├── index.js       # HTML generator
-    ├── styles.js      # CSS
-    └── script.js      # Client-side JS
-```
-
-### Publishing to VS Code Marketplace
-
-#### 1. Prerequisites
+## 🛠️ Development
 
 ```bash
-npm install -g @vscode/vsce
+npm install
+npm run package     # produces .vsix in project root
 ```
 
-#### 2. Create a Publisher (First time only)
+Press `F5` in VS Code to launch the Extension Development Host.
 
-1. Go to [Visual Studio Marketplace Publisher Management](https://marketplace.visualstudio.com/manage/publishers/)
-2. Sign in with your Microsoft account
-3. Click "Create publisher"
-4. Enter Publisher ID and Display Name
+## 🖥️ Supported platforms
 
-#### 3. Create a Personal Access Token (PAT)
+| Platform | Port detection | Kill |
+|----------|----------------|------|
+| macOS    | `lsof`          | `SIGTERM` / `SIGKILL` |
+| Linux    | `lsof` / `ss`   | `SIGTERM` / `SIGKILL` |
+| Windows  | `netstat` + `tasklist` | `taskkill /F` |
 
-1. Go to [Azure DevOps](https://dev.azure.com/)
-2. Click on your profile icon (top right) → "Personal access tokens"
-3. Click "New Token"
-4. Configure:
-   - **Name**: Any name (e.g., "vsce-publish")
-   - **Organization**: Select "All accessible organizations"
-   - **Scopes**: Click "Custom defined" → Check "Marketplace" → "Manage"
-5. Click "Create" and copy the token (save it securely)
+## 📝 License
 
-#### 4. Login and Publish
-
-```bash
-# Login to your publisher account
-vsce login <your-publisher-id>
-# Enter your PAT when prompted
-
-# Package the extension (creates .vsix file)
-vsce package
-
-# Publish to Marketplace
-vsce publish
-```
-
-#### 5. Update Version (for subsequent releases)
-
-```bash
-# Bump version and publish
-vsce publish patch  # 1.0.0 -> 1.0.1
-vsce publish minor  # 1.0.0 -> 1.1.0
-vsce publish major  # 1.0.0 -> 2.0.0
-```
-
-### Notes
-
-- The extension will be available on the Marketplace within a few minutes after publishing
-- Make sure to update `CHANGELOG.md` before publishing new versions
-- Never commit your PAT to the repository
-
-## License
-
-[MIT](LICENSE)
+[MIT](LICENSE.txt)

@@ -6,9 +6,29 @@ const { execSync } = require("child_process");
 const net = require("net");
 const { PLATFORM, TIMEOUT, STATE } = require("./constants");
 
+// Windows has no reliable built-in RAM/VRAM probe that doesn't require WMI/PS.
+const SUPPORTS_MEMORY_PROBE = PLATFORM === "darwin" || PLATFORM === "linux";
+
+// Well-known TLS ports — for these, buildAddress uses https://. For
+// everything else, http://. Users can override by editing apps.json
+// or by adding a custom protocol map.
+const TLS_PORTS = new Set([443, 8443, 9443]);
+
 /**
- * Get all listening ports on the system
- * @returns {Array<{port: number, pid: number|null, process: string, state: string}>}
+ * Build a clickable URL for the given port. Defaults to http://localhost:PORT.
+ * Uses https:// for ports in the TLS_PORTS set.
+ * @param {number} port
+ * @returns {string}
+ */
+function buildAddress(port) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return "";
+  const protocol = TLS_PORTS.has(port) ? "https" : "http";
+  return protocol + "://localhost:" + port;
+}
+
+/**
+ * Get all listening ports on the system, enriched with RAM and VRAM usage.
+ * @returns {Array<{port: number, pid: number|null, process: string, state: string, ram: string, vram: string}>}
  */
 function getListeningPorts() {
   let ports = [];
@@ -19,7 +39,21 @@ function getListeningPorts() {
     ports = getPortsWindows();
   }
 
-  return ports.map((p) => ({ ...p, state: STATE.LISTEN }));
+  // Cache nvidia-smi output once per refresh — not per PID.
+  const vramByPid = SUPPORTS_MEMORY_PROBE ? getVramMap() : new Map();
+  // Batch-fetch RAM for all PIDs in a single `ps` call. Was previously
+  // one spawn per port (O(n) spawns); now 1 spawn total. Big win on
+  // hosts with many listening ports.
+  const pids = ports.map((p) => p.pid).filter(Number.isInteger);
+  const ramByPid = SUPPORTS_MEMORY_PROBE ? getRamMap(pids) : new Map();
+
+  return ports.map((p) => ({
+    ...p,
+    state: STATE.LISTEN,
+    address: buildAddress(p.port),
+    ram: SUPPORTS_MEMORY_PROBE ? getRamUsage(p.pid, ramByPid) : "-",
+    vram: vramByPid.get(p.pid) || "-",
+  }));
 }
 
 /**
@@ -225,8 +259,148 @@ function sortByPort(ports) {
   return ports.sort((a, b) => a.port - b.port);
 }
 
+/**
+ * Format a kilobyte value into a human-readable string.
+ * @param {number} kb
+ * @returns {string}
+ */
+function formatKb(kb) {
+  if (kb > 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
+  return `${(kb / 1024).toFixed(0)} MB`;
+}
+
+/**
+ * Build a PID → RSS (KB) map from a single `ps` call, instead of
+ * spawning one `ps` per PID. The single call passes all PIDs as a
+ * comma-separated list to `-p`, which is dramatically cheaper when
+ * the panel has many rows.
+ *
+ * Returns an empty Map if the call fails or on Windows.
+ * @param {Array<number>} pids
+ * @returns {Map<number, number>} pid → KB
+ */
+function getRamMap(pids) {
+  const map = new Map();
+  if (!Array.isArray(pids) || pids.length === 0) return map;
+  if (process.platform === "win32") {
+    // Fall back to the per-PID lookup on Windows (no batched -p syntax
+    // equivalent is reliable across Windows versions).
+    for (const pid of pids) {
+      try {
+        const out = execSync(
+          `tasklist /FI "PID eq ${pid}" /NH /FO CSV 2>NUL`,
+          { encoding: "utf-8", timeout: 2000 }
+        );
+        const m = out.match(/"[^"]+"\s+(\d+)\s/);
+        if (m) map.set(pid, parseInt(m[1], 10) * 1024); // tasklist reports bytes
+      } catch { /* ignore */ }
+    }
+    return map;
+  }
+  try {
+    const pidList = pids.filter(Number.isInteger).join(",");
+    if (!pidList) return map;
+    const output = execSync(
+      `ps -o pid=,rss= -p ${pidList} 2>/dev/null || true`,
+      { encoding: "utf-8", timeout: 2000 }
+    );
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Output is whitespace-separated: "  12345  65432"
+      const m = trimmed.match(/^(\d+)\s+(\d+)/);
+      if (!m) continue;
+      const pid = parseInt(m[1], 10);
+      const kb = parseInt(m[2], 10);
+      if (Number.isInteger(pid) && Number.isInteger(kb)) {
+        map.set(pid, kb);
+      }
+    }
+  } catch {
+    // ps not available — leave map empty.
+  }
+  return map;
+}
+
+/**
+ * Get RAM usage (Resident Set Size) for a single PID.
+ * Prefer the batched `getRamMap` for many PIDs.
+ * @param {number|null} pid
+ * @param {Map<number, number>} [ramMap] - optional pre-built map
+ * @returns {string} e.g. "128 MB" or "-"
+ */
+function getRamUsage(pid, ramMap) {
+  if (!Number.isInteger(pid) || pid <= 0) return "-";
+  if (ramMap && ramMap.has(pid)) {
+    return formatKb(ramMap.get(pid));
+  }
+  // Fallback: spawn a single ps call.
+  try {
+    const output = execSync(`ps -o rss= -p ${pid} 2>/dev/null || true`, {
+      encoding: "utf-8",
+      timeout: 2000,
+    }).trim();
+    if (!output) return "-";
+    const kb = parseInt(output, 10);
+    if (isNaN(kb)) return "-";
+    return formatKb(kb);
+  } catch {
+    return "-";
+  }
+}
+
+/**
+ * Build a PID → VRAM string map from a single `nvidia-smi` call.
+ * Returns an empty Map if nvidia-smi is missing or fails.
+ * @returns {Map<number, string>}
+ */
+function getVramMap() {
+  const map = new Map();
+  try {
+    const output = execSync(
+      "nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null || true",
+      { encoding: "utf-8", timeout: 2000 }
+    );
+    if (!output) return map;
+
+    for (const line of output.trim().split("\n")) {
+      const parts = line.split(",").map((s) => s.trim());
+      if (parts.length < 2) continue;
+
+      const pid = parseInt(parts[0], 10);
+      const memStr = parts[1].replace("MiB", "").trim();
+      const mb = parseInt(memStr, 10);
+      if (isNaN(pid) || isNaN(mb)) continue;
+
+      map.set(pid, mb > 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
+    }
+  } catch {
+    // nvidia-smi not available — leave map empty.
+  }
+  return map;
+}
+
+/**
+ * Look up the PID currently listening on a given port, by re-running
+ * the scanner. Returns null if no process is listening, or if the PID
+ * cannot be determined (e.g. on Windows for system-owned ports).
+ * @param {number} port
+ * @returns {number|null}
+ */
+function getPidForPort(port) {
+  if (!Number.isInteger(port) || port <= 0) return null;
+  const ports = getListeningPorts();
+  const found = ports.find((p) => p.port === port);
+  return found && Number.isInteger(found.pid) ? found.pid : null;
+}
+
 module.exports = {
   getListeningPorts,
   killByPid,
   checkPortFree,
+  getRamUsage,
+  getRamMap,
+  getVramMap,
+  getPidForPort,
+  buildAddress,
 };

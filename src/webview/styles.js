@@ -138,6 +138,8 @@ module.exports = function getStyles() {
 
   tr:hover td { background: var(--hover); }
   tr.selected td { background: rgba(0, 230, 118, 0.08); }
+  tr.stopping td { opacity: 0.5; }
+  tr.stopped td { opacity: 0.4; font-style: italic; }
 
   /* Badges */
   .badge {
@@ -159,10 +161,45 @@ module.exports = function getStyles() {
 
   .process-name { color: var(--accent); }
 
+  /* Preset marker (small badge next to preset label) */
+  .preset-tag {
+    display: inline-block;
+    padding: 1px 5px;
+    margin-right: 4px;
+    border-radius: 3px;
+    background: rgba(33, 150, 243, 0.15);
+    color: #2196F3;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+
+  .preset-label {
+    font-weight: 600;
+  }
+
+  .process-subtitle {
+    font-size: 10px;
+    opacity: 0.5;
+    margin-top: 2px;
+    color: var(--fg);
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+
   .pid {
     opacity: 0.5;
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 12px;
+  }
+
+  .ram, .vram {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+    opacity: 0.8;
+    white-space: nowrap;
   }
 
   /* Kill button */
@@ -180,7 +217,67 @@ module.exports = function getStyles() {
 
   .kill-btn:hover { background: var(--danger); color: #fff; }
 
+  /* Stop button (graceful, SIGTERM) */
+  .stop-btn {
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .stop-btn:hover { background: var(--accent); color: #003311; }
+
+  /* Resume button (restart a stopped preset) */
+  .resume-btn {
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    border: 1px solid #2196F3;
+    background: transparent;
+    color: #2196F3;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .resume-btn:hover { background: #2196F3; color: #fff; }
+
+  /* Forget/clear button (remove stopped preset from list) */
+  .forget-btn {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--fg);
+    opacity: 0.5;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .forget-btn:hover { opacity: 1; background: var(--hover); }
+
+  /* Non-preset stopped row: no Resume button, just an em-dash placeholder */
+  .no-resume-hint {
+    display: inline-block;
+    padding: 2px 10px;
+    font-size: 11px;
+    opacity: 0.4;
+    color: var(--fg);
+  }
+
+  .action-group { display: inline-flex; gap: 4px; justify-content: flex-end; }
+
   .confirm-group { display: inline-flex; gap: 4px; }
+
+  /* Stopped-state badge (preset that was stopped) */
+  .badge-stopped { background: #555; color: #ccc; }
 
   /* Empty state */
   .empty { text-align: center; padding: 40px; opacity: 0.4; }
@@ -231,5 +328,192 @@ module.exports = function getStyles() {
   }
 
   .scan-panel label { font-size: 12px; opacity: 0.6; }
+
+  /* Build tag (confirms webview code version is current) */
+  .build-tag {
+    margin-left: auto;
+    font-size: 10px;
+    opacity: 0.4;
+    font-family: var(--vscode-editor-font-family, monospace);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    user-select: text;
+  }
+
+  /* Forwarded Address cell */
+  .address {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .address-link {
+    color: var(--vscode-textLink-foreground, #3794ff);
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .address-link:hover {
+    color: var(--vscode-textLink-activeForeground, #3794ff);
+    text-decoration: underline;
+  }
+
+  .address-actions {
+    display: inline-flex;
+    gap: 0;
+    margin-left: 4px;
+    opacity: 1;
+  }
+
+  .address-icon {
+    background: transparent;
+    border: none;
+    color: var(--vscode-textLink-foreground, #3794ff);
+    opacity: 0.7;
+    font-size: 12px;
+    line-height: 1;
+    padding: 1px 3px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .address-icon:hover {
+    background: var(--vscode-toolbar-hoverBackground, #5a5d5e50);
+    opacity: 1;
+  }
+
+  .address-icon:active {
+    background: var(--vscode-toolbar-activeBackground, #5a5d5e80);
+  }
+
+  .address-plain {
+    color: var(--fg);
+    opacity: 0.6;
+  }
+
+  /* Note column: user-authored annotations per port */
+  .note-cell {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .note-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+  .note-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg);
+    font-weight: 700;
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+  .note-empty {
+    flex: 1;
+    color: var(--fg);
+    opacity: 0.35;
+    font-style: italic;
+  }
+  .note-edit-btn {
+    visibility: hidden;
+    background: transparent;
+    border: none;
+    color: var(--vscode-textLink-foreground, #3794ff);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .note-cell:hover .note-edit-btn,
+  .note-empty:hover ~ .note-edit-btn {
+    visibility: visible;
+  }
+  .note-edit-btn:hover {
+    color: var(--vscode-textLink-activeForeground, #3794ff);
+  }
+  .note-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+  }
+  .note-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--vscode-input-background, #3c3c3c);
+    color: var(--vscode-input-foreground, #cccccc);
+    border: 1px solid var(--vscode-input-border, #3c3c3c);
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 12px;
+    outline: none;
+  }
+  .note-input:focus {
+    border-color: var(--vscode-focusBorder, #007fd4);
+  }
+  .note-save-btn,
+  .note-cancel-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .note-save-btn {
+    color: var(--vscode-testing-iconPassed, #73c991);
+  }
+  .note-save-btn:hover {
+    color: var(--vscode-testing-iconPassed, #73c991);
+    opacity: 0.7;
+  }
+  .note-cancel-btn {
+    color: var(--vscode-descriptionForeground, #999);
+  }
+  .note-cancel-btn:hover {
+    color: var(--vscode-foreground, #fff);
+  }
+
+  /* Custom right-click context menu */
+  .context-menu {
+    position: fixed;
+    z-index: 200;
+    background: var(--vscode-menu-background, #252526);
+    border: 1px solid var(--vscode-menu-border, #454545);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    padding: 4px 0;
+    min-width: 100px;
+  }
+
+  .context-menu-item {
+    display: block;
+    width: 100%;
+    padding: 4px 12px;
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    text-align: left;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .context-menu-item:hover {
+    background: var(--vscode-menu-selectionBackground, #094771);
+    color: var(--vscode-menu-selectionForeground, #ffffff);
+  }
 `;
 };
